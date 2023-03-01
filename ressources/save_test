@@ -1,0 +1,78 @@
+import cv2
+import urllib.request
+import smtplib
+import imghdr
+import pyfirmata
+import numpy as np
+from email.message import EmailMessage
+
+#Email configuration
+email_address = 'tlls.test.project@gmail.com'
+email_password = 'migCac-2wuvfy-nohpor'
+
+url = 'http://172.20.10.12/cam-hi.jpg'
+#img_cam = cv2.VideoCapture(0)
+##'''cam.bmp / cam-lo.jpg /cam-hi.jpg / cam.mjpeg '''
+cv2.namedWindow("live transmission", cv2.WINDOW_AUTOSIZE)
+plateCascade = cv2.CascadeClassifier('ressources/haarcascade_russian_plate_number.xml')
+minArea = 500
+
+while True:
+    #success, img = img_cam.read()
+    img_resp = urllib.request.urlopen(url)
+    imgnp = np.array(bytearray(img_resp.read()), dtype=np.uint8)
+    img = cv2.imdecode(imgnp, -1)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    numberPlate = plateCascade.detectMultiScale(gray, 1.15, 4)
+
+    # Drawing rectangle around the number plate
+    for (x, y, w, h) in numberPlate:
+        area = w * h
+        if area > minArea:
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 255), 4)
+
+            croppedPlate = img[y:y + h, x:x + w]
+            cv2.imshow("Cropped Number Plate", croppedPlate)
+
+    cv2.imshow("live transmission", img)
+
+    if cv2.waitKey(5) & 0xFF == ord('s'):
+        msg = EmailMessage()
+        msg['Subject'] = 'Greeting e-mail'
+        msg['From'] = email_address
+        msg['To'] = 'mohamedcoulibaly786@gmail.com'
+        msg.set_content("Dear Driver,\n"
+                        "This is reminder from TLSS."
+                        "You have been spotted missing a traffic light."
+                        "Please be more aware of when you are driving..."
+                        "thanks you")
+
+        with open('/Users/mohamedcoulibaly/PycharmProjects/SmtpEmail/venv/resources/junior.jpeg', 'rb') as file:
+            file_data = file.read()
+            file_type = imghdr.what(file.name)
+            file_name = file.name
+            msg.add_attachment(file_data, maintype='image', subtype=file_type, filename=file_name)
+
+        # assign a a email and port number, then naming it as smtp.
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+            smtp.login(email_address, email_password)
+            # # identify ourself in the main server
+            # smtp.ehlo()
+            # # to Encrypt out traffic
+            # smtp.starttls()
+            # # let's re-identify ourself
+            # smtp.ehlo()
+            # # To login to our account
+            # smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            #
+            # # Creating subject and body for our message
+            # subject = 'Grab that diner'
+            # body = 'How about making dinner? like right now!!'
+            #
+            # msg = f'Subject: {subject}\n\n{body}'
+            # # Sending the email
+            # smtp.sendmail(EMAIL_ADDRESS, 'mohamedcoulibaly786@gmail.com', msg)
+            smtp.send_message(msg)
+
+cv2.destroyAllWindows()

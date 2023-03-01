@@ -1,0 +1,107 @@
+import cv2
+import urllib.request
+import smtplib
+import imghdr
+import pyfirmata
+from pyfirmata import Arduino
+from email.message import EmailMessage
+from time import sleep
+import numpy as np
+
+#Email Configuration
+email_address = 'tlls.test.project@gmail.com'
+email_password = 'migCac-2wuvfy-nohpor'
+miss_count = 0
+
+#Arduino Configuration
+port = "/dev/cu.usbmodem101"
+board = Arduino(port)
+sleep(1.5)
+
+def blinkedLED(pin, msg):
+    print(msg)
+    board.digital[pin].write(1)
+    sleep(.5)
+    board.digital[pin].write(0)
+    sleep(.5)
+
+it = pyfirmata.util.Iterator(board)
+it.start()
+
+pirPin = board.get_pin("a:3:i")
+ledPin = 13
+
+#ESP332_cam Configurations
+url = 'http://172.20.10.12/cam-lo.jpg'
+# img_cam = cv2.VideoCapture(0)
+##'''cam.bmp / cam-lo.jpg /cam-hi.jpg / cam.mjpeg '''
+cv2.namedWindow("live transmission", cv2.WINDOW_AUTOSIZE)
+plateCascade = cv2.CascadeClassifier('ressources/haarcascade_russian_plate_number.xml')
+minArea = 500
+
+while True:
+    # success, img = img_cam.read()
+    img_resp = urllib.request.urlopen(url)
+    imgnp = np.array(bytearray(img_resp.read()), dtype=np.uint8)
+    img = cv2.imdecode(imgnp, -1)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    numberPlate = plateCascade.detectMultiScale(gray, 1.15, 4)
+
+    # Drawing rectangle around the number plate
+    for (x, y, w, h) in numberPlate:
+        area = w * h
+        if area > minArea:
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 255), 4)
+
+            croppedPlate = img[y:y +h, x:x + w]
+            cv2.imshow("Cropped Number Plate", croppedPlate)
+
+    value = pirPin.read()
+    print(value)
+    sleep(0.5)
+
+    if value is None:
+        pass
+    elif float(value) > 0.6:
+        miss_count += 1;
+        blinkedLED(ledPin, "Motion Detected")
+
+        if miss_count < 1:
+            msg = EmailMessage()
+            msg['Subject'] = 'Tracffic light missed !!'
+            msg['from'] = email_address
+            msg['To'] = 'mohamedcoulibaly786@gmail.com'
+            msg.set_content("Dear Driver,\n"
+                            "This is reminder from TlSS."
+                            "You have been spotted missing a traffic light."
+                            "--This is your last attempt, NEXT TIME THE AUTHORITIES WILL BE NOTIFIED !!"
+                            "Please be more aware of when you are driving..."
+                            "thanks you")
+            with smtplib.SMTP_SSL('stmp.gmail.com', 465) as smtp:
+                smtp.login(email_address, email_password)
+                smtp.send_message(msg)
+
+            print('loop'+miss_count)
+        else:
+            msg = EmailMessage()
+            msg['Subject'] = 'Missed traffic Light'
+            msg['from'] = email_address
+            msg['To'] = 'mohamedcoulibaly786@gmail.com'
+            msg.set_content("Driver spotted missing traffic light.\n"
+                            "Number plate attached bellow.")
+            with smtplib.SMTP_SSL('stmp.gmail.com', 465) as smtp:
+                smtp.login(email_address, email_password)
+                smtp.send_message(msg)
+        print(miss_count)
+
+    else:
+        print("Motion not detected")
+
+    cv2.imshow("live transmission", img)
+    key = cv2.waitKey(5)
+
+    if key == ord('q'):
+        break
+
+cv2.destroyAllWindows()

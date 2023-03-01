@@ -1,0 +1,68 @@
+import cv2
+import urllib.request
+import numpy
+import numpy as np
+#import pyfirmata
+#from pyfirmata import Arduino
+#from time import sleep
+
+#Info from the feed of the ESP32 Camera module
+url = "http://172.20.10.13/img.jpg"
+
+#initiating the Arduino Board
+#port = "COM3"
+#board = Arduino(port)
+#sleep(1.5)
+
+#initiating pyfirmata
+#it = pyfirmata.util.Iterator(board)
+#it = start()
+
+#Pin Confinguration for the PIR sensor
+#pirPin = board.get_pin("a:1:i")
+#redPin = 8
+#greenPin = 10
+
+#Cascade configurations
+nberPlateCascade = cv2.CascadeClassifier('ressources/haarcascade_russian_plate_number.xml')
+minArea = 500
+cnt = 0
+
+while True:
+    #img_resp is the feed taken from the ESP32 Camera
+    #success,
+    img_resp = urllib.request.urlopen(url)
+
+
+    #Convert the information in python readable code
+    imgConvert = np.array(bytearray(img_resp.read()), dtype = np.uint8)
+
+    #Decode the converted image to an image that OpenCV can  understand
+    img = cv2.imdecode(imgConvert, -1)
+    imgS = cv2.resize(img, (0, 0), None, 0.25, 0.25)
+
+    """
+    #Translate the image to RGB for the cascade to detect effectively
+    imgS = cv2.resize(img, (0, 0), None, 0.25, 0.25)
+    imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    numberPlate = nberPlateCascade.detectMultiScale(imgRGB, 1.1, 4)
+
+    #Drawing rectangle around the number plate
+    for(x, y, w, h) in numberPlate:
+        area = w*h
+        if area > minArea:
+            cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 255), 2)
+
+            croppedPlate = img[x:x+w, y:y+h]
+            cv2.imshow("Cropped Number Plate", croppedPlate)
+
+    """
+    cv2.imshow("Image", img)
+    #when the PIR sensor receive the an detection, the ESP will take a capture of the cropped image
+    #The Cropped Image is the number plate
+    if pirPin > 0.8:
+        #the code will write the screeshot at an given directory
+        #as the code runs, everytime when the PIR receive pulse it the take a screenshot.
+         cv2.imwrite('ressources/Flashed_Number/No_Plate'+str(cnt)+'.jpg', croppedPlate)
+        # +str(cnt)+ is here to count everytime when it takes a screenshot
+

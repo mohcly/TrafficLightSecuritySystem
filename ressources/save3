@@ -1,0 +1,177 @@
+import cv2
+import time
+import urllib.request
+import smtplib
+import imghdr
+import pyfirmata
+from pyfirmata import Arduino
+from email.message import EmailMessage
+from time import sleep
+import numpy as np
+
+#Email Configuration
+email_address = 'tlls.test.project@gmail.com'
+email_password = 'migCac-2wuvfy-nohpor'
+miss_count = 0
+shots_count = 0
+count = 0
+
+#Arduino Configuration
+port = "/dev/cu.usbmodem101"
+board = Arduino(port)
+sleep(.5)
+
+green = 2
+yellow = 3
+red = 4
+
+def turnOn(pin, time):
+    board.digital[pin].write(1)
+    sleep(time)
+    board.digital[pin].write(0)
+    sleep(0.5)
+def OnOnly(pin):
+    board.digital[pin].write(1)
+# def normalOn(pin, time):
+#     board.digital[pin].write(1)
+#     sleep(time)
+#     board.digital[pin].write(0)
+#     sleep(0.5)
+def OffOnly(pin):
+    board.digital[pin].write(0)
+
+
+def blinkedLED(pin, msg):
+    print(msg)
+    board.digital[pin].write(1)
+    sleep(0.5)
+    board.digital[pin].write(0)
+    sleep(.5)
+def sendWarning(title, msg_content, images):
+    msg = EmailMessage()
+    msg['Subject'] = title
+    msg['from'] = email_address
+    msg['To'] = 'mohamedcoulibaly786@gmail.com'
+    msg.set_content(msg_content)
+    if images[0] == images[1]:
+        pass
+    else:
+        for images in images:
+            with open(images, 'rb') as file:
+                file_data = file.read()
+                file_type = imghdr.what(file.name)
+                file_name = file.name
+            msg.add_attachment(file_data, maintype='image', subtype=file_type, filename=file_name)
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login(email_address, email_password)
+        smtp.send_message(msg)
+
+def Ai():
+    img_resp = urllib.request.urlopen(url)
+    imgnp = np.array(bytearray(img_resp.read()), dtype=np.uint8)
+    img = cv2.imdecode(imgnp, -1)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    numberPlate = plateCascade.detectMultiScale(gray, 1.15, 4)
+
+    # Drawing rectangle around the number plate
+    for (x, y, w, h) in numberPlate:
+        area = w * h
+        if area > minArea:
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 255), 4)
+
+            croppedPlate = img[y:y + h, x:x + w]
+            cv2.imshow("Cropped Number Plate", croppedPlate)
+
+it = pyfirmata.util.Iterator(board)
+it.start()
+
+pirPin = board.get_pin("a:3:i")
+ledPin = 13
+
+#ESP332_cam Configurations
+url = 'http://172.20.10.12/cam-mid.jpg'
+# img_cam = cv2.VideoCapture(0)
+##'''cam.bmp / cam-lo.jpg /cam-hi.jpg / cam.mjpeg '''
+cv2.namedWindow("live transmission", cv2.WINDOW_AUTOSIZE)
+plateCascade = cv2.CascadeClassifier('ressources/haarcascade_russian_plate_number.xml')
+minArea = 500
+
+
+while True:
+    # turnOn(green, 1)
+    # turnOn(yellow, 1)
+    # timeout = 20 # [seconds]
+
+    # timeout_start = time.time()
+
+    while time.time() < 30:
+        print(count)
+        count += 1
+        if time.time() > 10:
+            pass
+        else:
+            OnOnly(green)
+        # OffOnly(red)
+        # normalOn(red, 0.5)
+        # success, img = img_cam.read()
+        Ai()
+        while time.time() > 10 and time.time()< 21:
+            OffOnly(green)
+            OnOnly(red)
+            Ai()
+            value = pirPin.read()
+            print(value)
+            sleep(0.00001)
+            if value is None:
+                pass
+            elif float(value) > 0.6:
+                miss_count += 1;
+                # blinkedLED(ledPin, "Motion Detected")
+                # sleep(.00001)
+                sendWarning('Tracffic light missed !!',
+                            "Dear Driver,\n"
+                            "This is reminder from TlSS."
+                            "You have been spotted missing a traffic light."
+                            "Ammont of time missing the traffic light.\n"
+                            "---------------"+str(miss_count)+"---------------\n"
+                            "Please understand that if it exceed 2 times the authoroties will be informed."
+                            "Please be more aware of when you are driving..."
+                            "thanks you",
+                            images=[0, 0])
+                print(miss_count)
+                if miss_count > 2:
+                    cv2.imwrite("/Users/mohamedcoulibaly/PycharmProjects/TrafficLightSecuritySystem/ressources/number_plate/"
+                                "No_Plate_"+str(shots_count)+".jpg", croppedPlate)
+                    cv2.imwrite("/Users/mohamedcoulibaly/PycharmProjects/TrafficLightSecuritySystem/ressources/car/"
+                                "Car_"+str(shots_count)+".jpg", img)
+
+                    images = ["/Users/mohamedcoulibaly/PycharmProjects/TrafficLightSecuritySystem/ressources/number_plate/"
+                                    "No_Plate_"+str(shots_count)+".jpg",
+                                    "/Users/mohamedcoulibaly/PycharmProjects/TrafficLightSecuritySystem/ressources/car/"
+                                    "Car_" + str(shots_count) + ".jpg"
+                                    ]
+                    sleep(0.00001)
+                    sendWarning('Missed traffic Light',
+                                "Driver spotted missing traffic light.\n"
+                                "Number plate attached bellow."
+                                "Amount of time missed.\n"
+                                "-------" + str(miss_count) + "-------",
+                                images)
+                    sleep(0.00001)
+                    print(miss_count)
+                    shots_count += 1
+            else:
+                print("Motion not detected")
+                cv2.imshow("live transmission", img)
+                key = cv2.waitKey(1)
+            OffOnly(red)
+        key = cv2.waitKey(1)
+        if time.time() > 10:
+            pass
+        else:
+            OffOnly(green)
+    if key == ord('s'):
+        break
+
+cv2.destroyAllWindows()
